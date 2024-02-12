@@ -1,16 +1,12 @@
 
 module.exports = {
-    createUser: [
+    createSchool: [
         {
             model: 'username',
             required: true,
         },
         {
-            model: 'email',
-            required: true,
-        },
-        {
-            model: 'password',
+            model: 'vacancy',
             required: true,
         },
     ],
