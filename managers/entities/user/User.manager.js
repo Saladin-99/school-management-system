@@ -26,9 +26,18 @@ module.exports = class User {
         return await this.mongomodels.User.findOneAndDelete({ email });
     }
 
-    async createUser({username, email, password}){
-
-        const user = {username, email, password};
+    async createUser({username, email, password, isAdmin=false, school="school"}){
+        let user;
+        if (isAdmin == false && school=="school") {
+            return {
+                error: "Failed to create user. Missing school field!"
+            };
+        }else if (isAdmin == false){
+            let affiliatedSchool=school
+            user = {username, email, password, isAdmin, affiliatedSchool}
+        }else {
+            user = {username, email, password, isAdmin};
+        }
         // Data validation
         let result = await this.validators.User.createUser(user);
         if(result) return result;

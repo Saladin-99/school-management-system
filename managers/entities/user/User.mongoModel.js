@@ -5,8 +5,9 @@ const userSchema = new Schema({
     username: { type: String, required: true },
     email: { type: String, required: true, unique: true},
     password: { type: String, required: true },
-    // You can add other fields as needed
-}); // Optional: Adds createdAt and updatedAt timestamps
+    isAdmin: { type: Boolean, default: false },
+    affiliatedSchool: {type: String,required: function() { return !this.isAdmin; }}
+}); 
 
 // Create and export the User model
 module.exports = mongoose.model('User', userSchema);

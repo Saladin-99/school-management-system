@@ -2,7 +2,7 @@
 module.exports = {
     createClassroom: [
         {
-            model: 'username',
+            model: 'name',
             required: true,
         },
         {
