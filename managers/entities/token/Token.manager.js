@@ -42,11 +42,11 @@ module.exports = class TokenManager {
         })
     }
 
-    _verifyToken({token, secret}){
+    _verifyToken({token, secret,log}){
         let decoded = null;
         try {
             decoded = jwt.verify(token, secret);
-        } catch(err) { console.log(err); }
+        } catch(err) {/*removed console.log(err);*/ }
         return decoded;
     }
 

@@ -3,7 +3,7 @@ const Schema = mongoose.Schema;
 
 const schoolSchema = new Schema({
     name: { type: String, required: true, unique: true },
-    vacancy: { type: Number, required: true },
+    location: { type: String, required: true},
     classrooms: [{ type: Schema.Types.ObjectId, ref: 'Classroom' , unique: true }],
     admins:[{ type: Schema.Types.ObjectId, ref: 'User' , unique: true }]
 

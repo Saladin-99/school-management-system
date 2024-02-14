@@ -4,6 +4,7 @@ const Schema = mongoose.Schema;
 const classroomSchema = new Schema({
     name: { type: String, required: true, unique: true },
     vacancy: { type: Number, required: true },
+    school: {type:String},
     students: [{ type: Schema.Types.ObjectId, ref: 'Student', unique: true }],
     // You can add other fields as needed
 }); // Optional: Adds createdAt and updatedAt timestamps

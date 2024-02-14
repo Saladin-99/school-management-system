@@ -1,6 +1,6 @@
 module.exports = class Student { 
 
-    constructor({utils, cache, config, cortex, managers, validators, mongomodels }={}){
+    constructor({utils, cache, config, cortex, managers, validators, mongomodels, middleware }={}){
         this.config              = config;
         this.cortex              = cortex;
         this.validators          = validators; 
@@ -14,7 +14,7 @@ module.exports = class Student {
     } 
 
     async getStudentFromDatabase(username) {
-        return await this.mongomodels.Student.findOne({ username });
+        return await this.mongomodels.Student.findOne({username: username});
     }
 
     async updateStudentInDatabase(username, studentData) {
@@ -24,13 +24,80 @@ module.exports = class Student {
     async deleteStudentFromDatabase(username) {
         return await this.mongomodels.Student.findOneAndDelete({ username });
     }
+    async verifyUser(ID) {
+        try {
+            const user = await this.mongomodels.User.findOne({ _id: ID });
+            if (!user) {
+                return {
+                    error: "User not found."
+                };
+            }
+            if (user.isAdmin) {
+                return {
+                    error: "SuperAdmin can't access students."
+                };
+            }
+            return {
+                user:user,
+                message: "School admin verified"
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                error: "Failed to verify user."
+            };
+        }
+    }
 
-    async createStudent({username, classroom}) {
+    async verifySchoolAndClass(adminschool, classname) {
+        try{
+            classroom = await this.mongomodels.Classroom.findOne({ name: classname});
+            if (!classroom){
+                return {
+                    error: "Classroom doesn't exist"
+                };
+            }
+            if (classroom.school!=adminschool) {
+                return {
+                    error: "This class isn't in your school"
+                };
+            }
+            return{
+
+            };
+        } catch(error) {
+            console.log(error);
+            return {
+                error: "Failed to verify user."
+            };
+        }
+
+
+    }
+    
+
+
+    async createStudent({__token, username, classroom}) {
+        const token=__token
+        let decoded_ID= __token.userId
+        let user=null
+        try{
+           user= this.verifyUser(decoded_ID)
+        }catch(error){
+            return {
+                error: error
+            };
+        }
+
         const student = {username, classroom};
 
         // Data validation
         let result = await this.validators.Student.createStudent(student);
         if(result) return result;
+
+        if (classroom){
+            this.verifySchoolAndClass(user.affiliatedSchool,classroom)
+        }
 
         try {
             let createdStudent = await this.createStudentInDatabase(student);
@@ -46,9 +113,18 @@ module.exports = class Student {
         }
     }
 
-    async getStudentByUsername(__query) {
+    async getStudentByUsername({__token,__query}) {
+        const token=__token
         let query= __query
-        const username = query.__query.username
+        const username = query.username
+        let decoded_ID= __token.userId
+        try{
+            this.verifyUser(decoded_ID)
+        }catch(error){
+            return {
+                error: error
+            };
+        }
         try {
             const student = await this.getStudentFromDatabase(username);
             if (!student) {
@@ -67,11 +143,20 @@ module.exports = class Student {
         }
     }
 
-    async updateStudentByUsername({username, classroom}) {
+    async updateStudentByUsername({__token,username, classroom}) {
+        const token=__token
+        let decoded_ID= __token.userId
+        try{
+            this.verifyUser(decoded_ID)
+        }catch(error){
+            return {
+                error: error
+            };
+        }
         try {
-            const studentData = {classroom};
+            const studentData = {username, classroom};
             // Data validation
-            let result = await this.validators.Student.updateStudent(studentData);
+            let result = await this.validators.Student.createStudent(studentData);
             if(result) return result;
 
             const updatedStudent = await this.updateStudentInDatabase(username, studentData);
@@ -92,8 +177,21 @@ module.exports = class Student {
         }
     }
 
-    async deleteStudentByUsername({username}) {
+    async deleteStudentByUsername({__token, username}) {
+        const token=__token
+        let decoded_ID= __token.userId
+        try{
+            this.verifyUser(decoded_ID)
+        }catch(error){
+            return {
+                error: error
+            };
+        }
         try {
+            const studentData = {username};
+            // Data validation
+            let result = await this.validators.Student.createStudent(studentData);
+            if(result) return result;
             const deletedStudent = await this.deleteStudentFromDatabase(username);
             if (!deletedStudent) {
                 return {

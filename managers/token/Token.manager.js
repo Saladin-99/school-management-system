@@ -48,7 +48,7 @@ module.exports = class TokenManager {
         let decoded = null;
         try {
             decoded = jwt.verify(token, secret);
-        } catch(err) { console.log(err); }
+        } catch(err) {}
         return decoded;
     }
 
@@ -65,6 +65,22 @@ module.exports = class TokenManager {
 
 
         let decoded = __longToken;
+        console.log(decoded);
+        
+        let shortToken = this.genShortToken({
+            userId: decoded.userId, 
+            userKey: decoded.userKey,
+            sessionId: nanoid(),
+            deviceId: md5(__device),
+        });
+
+        return { shortToken };
+    }
+        /** generate shortId based on a given longId */
+    v2_createShortToken({ __device, longToken}){
+
+
+        let decoded = this.verifyLongToken(longToken);
         console.log(decoded);
         
         let shortToken = this.genShortToken({

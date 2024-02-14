@@ -7,6 +7,10 @@ module.exports = ({ meta, config, managers }) =>{
         let decoded = null
         try {
             decoded = managers.token.verifyShortToken({token: req.headers.token});
+            if (!decoded){
+                console.log("failed to decode as short token. trying to decode as long token..")
+                decoded = managers.token.verifyLongToken({token: req.headers.token});
+            }
             if(!decoded){
                 console.log('failed to decode-1')
                 return managers.responseDispatcher.dispatch(res, {ok: false, code:401, errors: 'unauthorized'});
@@ -15,7 +19,7 @@ module.exports = ({ meta, config, managers }) =>{
             console.log('failed to decode-2')
             return managers.responseDispatcher.dispatch(res, {ok: false, code:401, errors: 'unauthorized'});
         }
-    
+        console.log("token decoded successfully")
         next(decoded);
     }
 }

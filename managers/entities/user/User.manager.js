@@ -22,8 +22,55 @@ module.exports = class User {
     async getUserFromDatabase(email) {
         return await this.mongomodels.User.findOne({ email })
     }
+    async getUserById(_id){
+        return await this.mongomodels.User.findOne({ _id })
+    }
     async deleteUserFromDatabase(email){
         return await this.mongomodels.User.findOneAndDelete({ email });
+    }
+    async verifyUser(email,password) {
+        try{
+            user = await this.getUserFromDatabase(email)
+            if (!user) {
+                return {error:"Wrong email"};
+            }
+            if (user.password!=password) {
+                return {error:"Wrong Password"};
+            }
+            return{
+                user: user,
+                message:"login Successful"
+            };
+        }catch(error){
+            return{
+                error:"Login Failed",
+                message: error
+            };
+        }
+    }
+    async verifyEmail(email,id){
+        user = await this.getUserById(id)
+        if(user.email==email){
+            return{message: "email belongs to current user."};
+        }
+        else{
+            return{error: "email doesn't belong to current user."};
+        }
+    }
+    async verifySchool(name){
+        try{
+            school= await this.mongomodels.School.findOne({name})
+            if (!school) {
+                return{
+                    error:"School doesn't exist."
+                };
+            }
+        }catch(error){
+            console.log(error)
+            return {error:"Failed to create user."};
+        }
+
+
     }
 
     async createUser({username, email, password, isAdmin=false, school="school"}){
@@ -33,6 +80,7 @@ module.exports = class User {
                 error: "Failed to create user. Missing school field!"
             };
         }else if (isAdmin == false){
+            this.verifySchool(school)
             let affiliatedSchool=school
             user = {username, email, password, isAdmin, affiliatedSchool}
         }else {
@@ -45,6 +93,7 @@ module.exports = class User {
 
         // Create the user
         try {
+
             let createdUser     = await this.createUserInDatabase(user);
             let longToken       = this.tokenManager.genLongToken({userId: createdUser._id, userKey: createdUser.key });
             return {
@@ -60,11 +109,29 @@ module.exports = class User {
         }
     }
 
-    async getUserByEmail(__query) {
-        let query= __query
-        const email = query.__query.email
+    async loginUser({email, password}) {
+        try{
+            let user            = await this.verifyUser(email, password)
+            let longToken       = this.tokenManager.genLongToken({userId: createdUser._id, userKey: createdUser.key });
+            let shortToken      = this.tokenManager.v2_createShortToken(longToken)
+            return {
+                message: "login successful",
+                user: user,
+                longToken: longToken,
+                shortToken: shortToken
+            };
+        }catch(error){
+            return{
+                error:error
+            };
+        }
+    }
+
+    async getUser({__token}) {
+        const token=__token
+        let decoded_ID= __token.userId
         try {
-            const user = await this.getUserFromDatabase(email);
+            const user = await this.getUserById(decoded_ID)
             if (!user) {
                 return {
                     error: "User not found."
@@ -81,13 +148,17 @@ module.exports = class User {
         }
     }
 
-    async updateUserByEmail({username, email, password, oldEmail}) {
+    async updateUserByEmail({__token,username, email, password, oldEmail=null}) {
         try {
+            const token=__token
+            let decoded_ID= __token.userId
             const userData={username, email, password};
             // Data validation
             let result = await this.validators.User.createUser(userData);
             if(result) return result;
-            
+            if(!oldEmail){oldEmail=email}
+            this.verifyEmail(oldEmail, decoded_ID)
+
             const updatedUser = await this.updateUserInDatabase(oldEmail, userData)
             if (!updatedUser) {
                 return {
@@ -106,8 +177,11 @@ module.exports = class User {
         }
     }
 
-    async deleteUserByEmail({email}) {
+    async deleteUserByEmail({__token,email}) {
         try {
+            const token=__token
+            let decoded_ID= __token.userId
+            this.verifyEmail(email,decoded_ID)
             const deletedUser = await this.deleteUserFromDatabase(email)
             if (!deletedUser) {
                 return {
