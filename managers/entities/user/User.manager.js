@@ -8,14 +8,67 @@ module.exports = class User {
         this.tokenManager        = managers.token;
         this.usersCollection     = "users";
         this.userExposed         = ['createUser'];
-        this.httpExposed         = ['post=createUser','get=getUserByEmail','delete=deleteUserByEmail','put=updateUserByEmail'];
+        this.httpExposed         = ['post=createUser','get=getUser','delete=deleteUserByEmail','put=updateUserByEmail','loginUser'];
     }
 
-
-
+    async addAdminToSchool(name, user) {
+        try {
+            const school = await this.mongomodels.School.findOne({ name });
+            if (!school) {
+                throw new Error("School not found.");
+            }
+            // Add the admin to the school's admin array
+            if (!school.admins) {
+                school.admins = []; // Ensure admins array exists
+            }
+            school.admins.push(user._id);
+            await school.save();
+        } catch (error) {
+            console.error("Error adding admin to school:", error);
+            throw error; // Propagate the error
+        }
+    }
+    async removeAdminFromSchool(name, user) {
+        try {
+            const school = await this.mongomodels.School.findOne({ name });
+            if (!school) {
+                throw new Error("School not found.");
+            }
+            // Remove the admin from the school's admin array
+            if (school.admins && school.admins.length > 0) {
+                // Find the index of the user in the admins array
+                const index = school.admins.findIndex(admin => admin.equals(user._id));
+                if (index !== -1) {
+                    // Remove the user from the admins array
+                    school.admins.splice(index, 1);
+                    await school.save();
+                    return { message: "Admin removed from school successfully." };
+                } else {
+                    throw new Error("User is not an admin of this school.");
+                }
+            } else {
+                throw new Error("School has no admins.");
+            }
+        } catch (error) {
+            console.error("Error removing admin from school:", error);
+            throw error; // Propagate the error
+        }
+    }
+    
+    
     async createUserInDatabase(userData) {
-        return await this.mongomodels.User.create(userData);
-    } 
+        try {
+            const user = await this.mongomodels.User.create(userData);
+            if (user.affiliatedSchool) {
+                await this.addAdminToSchool(user.affiliatedSchool, user);
+            }
+            return user;
+        } catch (error) {
+            console.error("Error creating user:", error);
+            throw error; // Propagate the error
+        }
+    }
+    
     async updateUserInDatabase(email, userData) {
         return await this.mongomodels.User.findOneAndUpdate({ email }, userData, { new: true });
     } 
@@ -26,74 +79,83 @@ module.exports = class User {
         return await this.mongomodels.User.findOne({ _id })
     }
     async deleteUserFromDatabase(email){
-        return await this.mongomodels.User.findOneAndDelete({ email });
+        try {
+            const user = await this.getUserFromDatabase(email)
+            if (user.affiliatedSchool) {
+                await this.removeAdminFromSchool(user.affiliatedSchool, user);
+            }
+            return await this.mongomodels.User.findOneAndDelete({email})
+        } catch (error) {
+            console.error("Error creating user:", error);
+            throw error; // Propagate the error
+        }
     }
-    async verifyUser(email,password) {
-        try{
-            user = await this.getUserFromDatabase(email)
-            if (!user) {
-                return {error:"Wrong email"};
+    async verifyUser(email, password) {
+        try {
+            const user = await this.getUserFromDatabase(email);
+            if (!user || user.password !== password) {
+                throw new Error("Invalid email or password.");
             }
-            if (user.password!=password) {
-                return {error:"Wrong Password"};
-            }
-            return{
+            return {
                 user: user,
-                message:"login Successful"
+                message: "Login successful."
             };
-        }catch(error){
-            return{
-                error:"Login Failed",
-                message: error
-            };
+        } catch (error) {
+            console.error("Error verifying user:", error);
+            throw new Error("Login failed. Please try again later.");
         }
     }
-    async verifyEmail(email,id){
-        user = await this.getUserById(id)
-        if(user.email==email){
-            return{message: "email belongs to current user."};
-        }
-        else{
-            return{error: "email doesn't belong to current user."};
+    
+    async verifyEmail(email, id) {
+        try {
+            const user = await this.getUserById(id);
+            if (user.email === email) {
+                return { message: "Email belongs to current user." };
+            } else {
+                throw new Error("Email doesn't belong to current user.");
+            }
+        } catch (error) {
+            console.error("Error verifying email:", error);
+            throw new Error("Failed to verify email. Please try again later.");
         }
     }
+    
     async verifySchool(name){
         try{
-            school= await this.mongomodels.School.findOne({name})
+            const school= await this.mongomodels.School.findOne({name})
             if (!school) {
-                return{
-                    error:"School doesn't exist."
-                };
+                throw new Error("School doesn't exist.");
             }
         }catch(error){
             console.log(error)
-            return {error:"Failed to create user."};
+            throw new Error("Failed to verify school:" + error.message);
         }
 
 
     }
 
     async createUser({username, email, password, isAdmin=false, school="school"}){
-        let user;
-        if (isAdmin == false && school=="school") {
-            return {
-                error: "Failed to create user. Missing school field!"
-            };
-        }else if (isAdmin == false){
-            this.verifySchool(school)
-            let affiliatedSchool=school
-            user = {username, email, password, isAdmin, affiliatedSchool}
-        }else {
-            user = {username, email, password, isAdmin};
-        }
-        // Data validation
-        let result = await this.validators.User.createUser(user);
-        if(result) return result;
-        
-
-        // Create the user
         try {
-
+            let user;
+            if (isAdmin == false && school=="school") {
+                return {
+                    error: "Failed to create user. Missing school field!"
+                };
+            }else if (isAdmin == false){
+                try {
+                    await this.verifySchool(school);
+                } catch (error) {
+                    return { error: error.message };
+                }
+                let affiliatedSchool=school
+                user = {username, email, password, isAdmin, affiliatedSchool}
+            }else {
+                user = {username, email, password, isAdmin};
+            }
+            // Data validation
+            let result = await this.validators.User.createUser(user);
+            if(result) return result;
+        // Create the user
             let createdUser     = await this.createUserInDatabase(user);
             let longToken       = this.tokenManager.genLongToken({userId: createdUser._id, userKey: createdUser.key });
             return {
@@ -109,21 +171,23 @@ module.exports = class User {
         }
     }
 
-    async loginUser({email, password}) {
-        try{
-            let user            = await this.verifyUser(email, password)
-            let longToken       = this.tokenManager.genLongToken({userId: createdUser._id, userKey: createdUser.key });
-            let shortToken      = this.tokenManager.v2_createShortToken(longToken)
+    async loginUser({ email, password }) {
+        try {
+            const user = await this.verifyUser(email, password);
+            if (user.error) {
+                return { error: user.error };
+            }
+            const longToken = this.tokenManager.genLongToken({ userId: user.user._id, userKey: user.user.key });
+            const shortToken = this.tokenManager.v2_createShortToken(longToken);
             return {
-                message: "login successful",
-                user: user,
+                message: "Login successful.",
+                user: user.user,
                 longToken: longToken,
                 shortToken: shortToken
             };
-        }catch(error){
-            return{
-                error:error
-            };
+        } catch (error) {
+            console.error("Error logging in:", error);
+            return { error: "Failed to log in. Please try again later." };
         }
     }
 
@@ -148,54 +212,41 @@ module.exports = class User {
         }
     }
 
-    async updateUserByEmail({__token,username, email, password, oldEmail=null}) {
+    async updateUserByEmail({ __token, username, email, password, oldEmail = null }) {
         try {
-            const token=__token
-            let decoded_ID= __token.userId
-            const userData={username, email, password};
+            const token = __token;
+            const decodedId = __token.userId;
+            const userData = { username, email, password };
             // Data validation
             let result = await this.validators.User.createUser(userData);
-            if(result) return result;
-            if(!oldEmail){oldEmail=email}
-            this.verifyEmail(oldEmail, decoded_ID)
-
-            const updatedUser = await this.updateUserInDatabase(oldEmail, userData)
-            if (!updatedUser) {
-                return {
-                    error: "User not found."
-                };
+            if (result) return result;
+            if (!oldEmail) {
+                oldEmail = email;
             }
-            return {
-                user: updatedUser,
-                message: "User updated successfully."
-            };
+            await this.verifyEmail(oldEmail, decodedId); // This should be awaited
+            const updatedUser = await this.updateUserInDatabase(oldEmail, userData);
+            if (!updatedUser) {
+                return { error: "User not found." };
+            }
+            return { user: updatedUser, message: "User updated successfully." };
         } catch (error) {
-            console.log(error)
-            return {
-                error: "Failed to update user."
-            };
+            console.error("Error updating user:", error);
+            return { error: "Failed to update user: " + error.message};
         }
     }
-
-    async deleteUserByEmail({__token,email}) {
+    
+    async deleteUserByEmail({ __token, email }) {
         try {
-            const token=__token
-            let decoded_ID= __token.userId
-            this.verifyEmail(email,decoded_ID)
-            const deletedUser = await this.deleteUserFromDatabase(email)
+            const token = __token;
+            const decodedId = __token.userId;
+            await this.verifyEmail(email, decodedId); // This should be awaited
+            const deletedUser = await this.deleteUserFromDatabase(email);
             if (!deletedUser) {
-                return {
-                    error: "User not found."
-                };
+                return { error: "User not found." };
             }
-            return {
-                message: "User deleted successfully."
-            };
+            return { message: "User deleted successfully." };
         } catch (error) {
-            console.log(error)
-            return {
-                error: "Failed to delete user."
-            };
+            return { error: "Failed to delete user: " + error};
         }
     }
 }

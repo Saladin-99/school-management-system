@@ -38,6 +38,11 @@ module.exports = {
         type: 'string',
         length: {min: 3, max: 100}
     },
+    location: {
+        path: 'location',
+        type: 'string',
+        length: {min: 3, max: 100}
+    },
     shortDesc: {
         path: 'desc',
         type: 'string',

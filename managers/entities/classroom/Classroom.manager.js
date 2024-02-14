@@ -6,37 +6,28 @@ module.exports = class Classroom {
         this.validators          = validators; 
         this.mongomodels         = mongomodels;
         this.tokenManager        = managers.token;
-        this.studentsCollection     = "classrooms";
-        this.httpExposed         = ['post=createClassroom','get=getClassroomByName','delete=ClassroomByUsername','put=ClassroomByUsername'];
+        this.classroomsCollection     = "classrooms";
+        this.httpExposed         = ['post=createClassroom','get=getClassroomByName','delete=deleteClassroomByName','put=updateClassroomByName'];
     }
 
     async verifyUser(ID,classroom=null) {
         try {
             const user = await this.mongomodels.User.findOne({ _id: ID });
             if (!user) {
-                return {
-                    error: "User not found."
-                };
+                throw new Error("User not found.");
             }
             if (user.isAdmin) {
-                return {
-                    error: "SuperAdmin can't access students."
-                };
+                throw new Error("SuperAdmin can't access students.");
             }
             if (classroom && classroom.hasOwnProperty("school") && user.affiliatedSchool != classroom.school){
-                return {
-                    error: "Classroom not in your school"
-                };
+                throw new Error("Classroom not in your school");
             }
             return {
                 user: user,
                 message: "School admin verified"
             };
         } catch (error) {
-            console.log(error);
-            return {
-                error: "Failed to verify user."
-            };
+            throw new Error("Failed to verify user: " + error.message);
         }
     }
     async createClassroomInDatabase(classroomData) {
@@ -86,8 +77,8 @@ module.exports = class Classroom {
             if (!classroom.students) {
                 classroom.students = []; // Ensure students array exists
             }
-            classroom.vacancy++;
-            classroom.students.push(student._id); // Assuming student._id is the reference to the student document
+            classroom.vacancy--;
+            classroom.students.push(student._id);
     
             // Save the updated classroom document
             await classroom.save();
@@ -130,7 +121,7 @@ module.exports = class Classroom {
     
             // Remove the student from the classroom's students array
             classroom.students.splice(studentIndex, 1);
-            classroom.vacancy--;
+            classroom.vacancy++;
     
             // Save the updated classroom document
             await classroom.save();
@@ -159,7 +150,7 @@ module.exports = class Classroom {
             user=this.verifyUser(decoded_ID)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
         
@@ -214,7 +205,7 @@ module.exports = class Classroom {
             this.verifyUser(decoded_ID,name)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
         try {
@@ -249,7 +240,7 @@ module.exports = class Classroom {
             this.verifyUser(decoded_ID,classroom)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
         try {

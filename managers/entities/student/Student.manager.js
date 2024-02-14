@@ -28,24 +28,17 @@ module.exports = class Student {
         try {
             const user = await this.mongomodels.User.findOne({ _id: ID });
             if (!user) {
-                return {
-                    error: "User not found."
-                };
+                throw new Error("User not found.");
             }
             if (user.isAdmin) {
-                return {
-                    error: "SuperAdmin can't access students."
-                };
+                throw new Error("SuperAdmin can't access students.");
             }
             return {
                 user:user,
                 message: "School admin verified"
             };
         } catch (error) {
-            console.log(error);
-            return {
-                error: "Failed to verify user."
-            };
+            throw new Error("failed to verify user: " + error.message);
         }
     }
 
@@ -53,23 +46,17 @@ module.exports = class Student {
         try{
             classroom = await this.mongomodels.Classroom.findOne({ name: classname});
             if (!classroom){
-                return {
-                    error: "Classroom doesn't exist"
-                };
+                throw new Error("Classroom doesn't exist ");
             }
             if (classroom.school!=adminschool) {
-                return {
-                    error: "This class isn't in your school"
-                };
+                throw new Error("This class isn't in your school");
             }
             return{
 
             };
         } catch(error) {
             console.log(error);
-            return {
-                error: "Failed to verify user."
-            };
+            throw new Error("Failed to verify user: "+ error.message);
         }
 
 
@@ -85,7 +72,7 @@ module.exports = class Student {
            user= this.verifyUser(decoded_ID)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
 
@@ -122,7 +109,7 @@ module.exports = class Student {
             this.verifyUser(decoded_ID)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
         try {
@@ -150,7 +137,7 @@ module.exports = class Student {
             this.verifyUser(decoded_ID)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
         try {
@@ -184,7 +171,7 @@ module.exports = class Student {
             this.verifyUser(decoded_ID)
         }catch(error){
             return {
-                error: error
+                error: error.message
             };
         }
         try {
