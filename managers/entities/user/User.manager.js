@@ -171,14 +171,15 @@ module.exports = class User {
         }
     }
 
-    async loginUser({ email, password }) {
+    async loginUser({__device, email, password }) {
         try {
             const user = await this.verifyUser(email, password);
             if (user.error) {
                 return { error: user.error };
             }
+            
             const longToken = this.tokenManager.genLongToken({ userId: user.user._id, userKey: user.user.key });
-            const shortToken = this.tokenManager.v2_createShortToken(longToken);
+            const shortToken = this.tokenManager.v2_createShortToken({__device,longToken});
             return {
                 message: "Login successful.",
                 user: user.user,

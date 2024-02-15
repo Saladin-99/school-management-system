@@ -10,6 +10,12 @@ module.exports = {
             required: true,
         },
     ],
+    updateSchool:[
+        {
+            model: 'location',
+            require: true,
+        },
+    ],
 }
 
 

@@ -9,8 +9,43 @@ module.exports = class Student {
         this.studentsCollection     = "students";
         this.httpExposed         = ['post=createStudent','get=getStudentByUsername','delete=deleteStudentByUsername','put=updateStudentByUsername'];
     }
+    async addStudentToClass(student){
+        const classroom= await this.mongomodels.Classroom.findOne({name:student.classroom})
+        if(student && classroom){
+            if (!classroom.students){
+                classroom.students=[];
+            }
+            if (classroom.vacancy==0){
+                throw new Error("Classroom full!");
+            }
+            classroom.students.push(student._id)
+            classroom.vacancy--;
+            await classroom.save();
+        }
+    }
+    async removeStudentFromClass(student) {
+        const classroom= await this.mongomodels.Classroom.findOne({name:student.classroom})
+        if(student && classroom){
+            // Check if the student is in the classroom
+            const studentIndex = classroom.students.indexOf(student._id);
+
+            // Remove the student from the classroom's students array
+            classroom.students.splice(studentIndex, 1);
+            classroom.vacancy++;
+    
+            // Save the updated classroom document
+            await classroom.save();
+        }
+    }
     async createStudentInDatabase(studentData) {
-        return await this.mongomodels.Student.create(studentData);
+        const student = await this.mongomodels.Student.create(studentData)
+        try{
+            await this.addStudentToClass(student)
+            return student;
+        }catch(error){
+            throw error
+        }
+
     } 
 
     async getStudentFromDatabase(username) {
@@ -22,7 +57,9 @@ module.exports = class Student {
     } 
 
     async deleteStudentFromDatabase(username) {
-        return await this.mongomodels.Student.findOneAndDelete({ username });
+        const student= await this.mongomodels.Student.findOneAndDelete({ username });
+        await this.removeStudentFromClass(student)
+        return student
     }
     async verifyUser(ID) {
         try {
@@ -33,10 +70,7 @@ module.exports = class Student {
             if (user.isAdmin) {
                 throw new Error("SuperAdmin can't access students.");
             }
-            return {
-                user:user,
-                message: "School admin verified"
-            };
+            return user;
         } catch (error) {
             throw new Error("failed to verify user: " + error.message);
         }
@@ -44,7 +78,7 @@ module.exports = class Student {
 
     async verifySchoolAndClass(adminschool, classname) {
         try{
-            classroom = await this.mongomodels.Classroom.findOne({ name: classname});
+            const classroom = await this.mongomodels.Classroom.findOne({ name: classname});
             if (!classroom){
                 throw new Error("Classroom doesn't exist ");
             }
@@ -67,23 +101,18 @@ module.exports = class Student {
     async createStudent({__token, username, classroom}) {
         const token=__token
         let decoded_ID= __token.userId
-        let user=null
+        let user
+        // Data validation
+        const student = {username, classroom};
+        let result = await this.validators.Student.createStudent(student);
+        if(result) return result;
         try{
-           user= this.verifyUser(decoded_ID)
+           user= await this.verifyUser(decoded_ID)
+           await this.verifySchoolAndClass(user.affiliatedSchool,classroom)
         }catch(error){
             return {
                 error: error.message
             };
-        }
-
-        const student = {username, classroom};
-
-        // Data validation
-        let result = await this.validators.Student.createStudent(student);
-        if(result) return result;
-
-        if (classroom){
-            this.verifySchoolAndClass(user.affiliatedSchool,classroom)
         }
 
         try {
@@ -105,8 +134,9 @@ module.exports = class Student {
         let query= __query
         const username = query.username
         let decoded_ID= __token.userId
+        let user
         try{
-            this.verifyUser(decoded_ID)
+            user= await this.verifyUser(decoded_ID)
         }catch(error){
             return {
                 error: error.message
@@ -119,13 +149,14 @@ module.exports = class Student {
                     error: "Student not found."
                 };
             }
+            await this.verifySchoolAndClass(user.affiliatedSchool,student.classroom)
             return {
                 student
             };
         } catch (error) {
             console.log(error);
             return {
-                error: "Failed to fetch student."
+                error: "Failed to fetch student: " + error.message
             };
         }
     }
@@ -133,8 +164,15 @@ module.exports = class Student {
     async updateStudentByUsername({__token,username, classroom}) {
         const token=__token
         let decoded_ID= __token.userId
+        let user
+        const student= await this.getStudentFromDatabase(username)
+        const oldclass=student.classroom
+        if (!student){
+            return{error:"Student doesn't exist"};
+        }
         try{
-            this.verifyUser(decoded_ID)
+            user= await this.verifyUser(decoded_ID)
+            await this.verifySchoolAndClass(user.affiliatedSchool, classroom)
         }catch(error){
             return {
                 error: error.message
@@ -145,13 +183,11 @@ module.exports = class Student {
             // Data validation
             let result = await this.validators.Student.createStudent(studentData);
             if(result) return result;
-
+            student.classroom=classroom
+            await this.addStudentToClass(student)
+            student.classroom = oldclass
             const updatedStudent = await this.updateStudentInDatabase(username, studentData);
-            if (!updatedStudent) {
-                return {
-                    error: "Student not found."
-                };
-            }
+            await this.removeStudentFromClass(student)
             return {
                 student: updatedStudent,
                 message: "Student updated successfully."
@@ -159,7 +195,7 @@ module.exports = class Student {
         } catch (error) {
             console.log(error);
             return {
-                error: "Failed to update student."
+                error: "Failed to update student: " + error.message
             };
         }
     }
@@ -167,18 +203,20 @@ module.exports = class Student {
     async deleteStudentByUsername({__token, username}) {
         const token=__token
         let decoded_ID= __token.userId
+        let user
+        const student= await this.getStudentFromDatabase(username)
+        if(!student){
+            return{error: "student doesn't exist"}
+        }
         try{
-            this.verifyUser(decoded_ID)
+            user= await this.verifyUser(decoded_ID)
+            await this.verifySchoolAndClass(user.affiliatedSchool, student.classroom)
         }catch(error){
             return {
                 error: error.message
             };
         }
         try {
-            const studentData = {username};
-            // Data validation
-            let result = await this.validators.Student.createStudent(studentData);
-            if(result) return result;
             const deletedStudent = await this.deleteStudentFromDatabase(username);
             if (!deletedStudent) {
                 return {

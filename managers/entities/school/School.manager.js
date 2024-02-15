@@ -71,7 +71,7 @@ module.exports = class School {
         } catch (error) {
             console.log(error);
             return {
-                error: "Failed to create school."
+                error: "Failed to create school:" + error.message
             };
         }
     }
@@ -102,7 +102,7 @@ module.exports = class School {
         }
     }
 
-    async updateSchoolByID({__token, schoolID, name, location }) {
+    async updateSchoolByID({__token, schoolID, location }) {
         const token=__token
         let decoded_ID= __token.userId
         try{
@@ -111,9 +111,9 @@ module.exports = class School {
             return{error:error.message};
         }
         try {
-            const schoolData = { name, location };
+            const schoolData = { location };
             // Data validation
-            let result = await this.validators.School.createSchool(schoolData);
+            let result = await this.validators.School.updateSchool(schoolData);
             if(result) return result;
 
             const updatedSchool = await this.updateSchoolInDatabase(schoolID, schoolData);

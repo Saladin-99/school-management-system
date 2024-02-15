@@ -79,9 +79,7 @@ module.exports = class TokenManager {
         /** generate shortId based on a given longId */
     v2_createShortToken({ __device, longToken}){
 
-
-        let decoded = this.verifyLongToken(longToken);
-        console.log(decoded);
+        let decoded = this.verifyLongToken({token:longToken});
         
         let shortToken = this.genShortToken({
             userId: decoded.userId, 

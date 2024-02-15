@@ -7,7 +7,7 @@ module.exports = class Classroom {
         this.mongomodels         = mongomodels;
         this.tokenManager        = managers.token;
         this.classroomsCollection     = "classrooms";
-        this.httpExposed         = ['post=createClassroom','get=getClassroomByName','delete=deleteClassroomByName','put=updateClassroomByName'];
+        this.httpExposed         = ['post=createClassroom','get=getClassroomByName','delete=deleteClassroomByName'];
     }
 
     async verifyUser(ID,classroom=null) {
@@ -19,19 +19,26 @@ module.exports = class Classroom {
             if (user.isAdmin) {
                 throw new Error("SuperAdmin can't access students.");
             }
-            if (classroom && classroom.hasOwnProperty("school") && user.affiliatedSchool != classroom.school){
+            if (classroom && classroom.school && user.affiliatedSchool != classroom.school){
                 throw new Error("Classroom not in your school");
             }
-            return {
-                user: user,
-                message: "School admin verified"
-            };
+            return user;
         } catch (error) {
             throw new Error("Failed to verify user: " + error.message);
         }
     }
     async createClassroomInDatabase(classroomData) {
-        return await this.mongomodels.Classroom.create(classroomData);
+        const classroom=await this.mongomodels.Classroom.create(classroomData);
+        const school = await this.mongomodels.School.findOne({name:classroom.school})
+        if (classroom && school) {
+            if(!school.classrooms){
+                school.classroom=[];
+
+            }
+            school.classrooms.push(classroom._id);
+            await school.save();
+        }
+        return classroom;
     }
     
     async getClassroomFromDatabase(name) {
@@ -43,9 +50,22 @@ module.exports = class Classroom {
     }
     
     async deleteClassroomFromDatabase(name) {
+        const classroom=await this.mongomodels.Classroom.findOne({name});
+        const school = await this.mongomodels.School.findOne({name:classroom.school})
+        if (classroom && school) {
+            // Check if the student is in the classroom
+            const classIndex = school.classrooms.indexOf(classroom._id);
+            if (classIndex === -1) {
+                throw new error("classroom is not in school")
+            }
+    
+            // Remove the student from the classroom's students array
+            school.classrooms.splice(classIndex, 1);
+            school.save()
+        }
         return await this.mongomodels.Classroom.findOneAndDelete({ name });
     }
-    async addStudentToClassroom(username, name){
+    /*async addStudentToClassroom(username, name){
         try {
             // Find the student
             let student = await this.mongomodels.Student.findOne({ username });
@@ -140,14 +160,14 @@ module.exports = class Classroom {
             };
         }
     }
-    
+    */
     
     async createClassroom({ __token,name, vacancy }) {
         const token=__token
         let decoded_ID= __token.userId
-        const user = null
+        let user
         try{
-            user=this.verifyUser(decoded_ID)
+            user=await this.verifyUser(decoded_ID)
         }catch(error){
             return {
                 error: error.message
@@ -155,7 +175,6 @@ module.exports = class Classroom {
         }
         
         const classroomData = { name, vacancy,school:user.affiliatedSchool};
-    
         // Data validation
         let result = await this.validators.Classroom.createClassroom(classroomData);
         if(result) return result;
@@ -186,7 +205,7 @@ module.exports = class Classroom {
                     error: "Classroom not found."
                 };
             }
-            this.verifyUser(decoded_ID,classroom)
+            await this.verifyUser(decoded_ID,classroom)
             return {
                 classroom
             };
@@ -198,46 +217,16 @@ module.exports = class Classroom {
         }
     }
     
-    async updateClassroomByName({ __token, name, vacancy, students }) {
-        const token=__token
-        let decoded_ID= __token.userId
-        try{
-            this.verifyUser(decoded_ID,name)
-        }catch(error){
-            return {
-                error: error.message
-            };
-        }
-        try {
-            const classroomData = { name, vacancy, students };
-            // Data validation
-            let result = await this.validators.Classroom.createClassroom(classroomData);
-            if(result) return result;
-            this.verifyUser(decoded_ID,classroomData)
-            const updatedClassroom = await this.updateClassroomInDatabase(name, classroomData);
-            if (!updatedClassroom) {
-                return {
-                    error: "Classroom not found."
-                };
-            }
-            return {
-                classroom: updatedClassroom,
-                message: "Classroom updated successfully."
-            };
-        } catch (error) {
-            console.log(error);
-            return {
-                error: "Failed to update classroom."
-            };
-        }
-    }
-    
+   
     async deleteClassroomByName({__token, name }) {
         const token=__token
         let decoded_ID= __token.userId
-        classroom=this.getClassroomByName(name)
+        let classroom=await this.getClassroomFromDatabase(name)
+        if(!classroom){
+            return{error:"classroom doesn't exist"};
+        }
         try{
-            this.verifyUser(decoded_ID,classroom)
+           await this.verifyUser(decoded_ID,classroom)
         }catch(error){
             return {
                 error: error.message

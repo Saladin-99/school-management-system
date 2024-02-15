@@ -5,6 +5,10 @@ module.exports = {
             model: 'username',
             required: true,
         },
+        {
+            model:'classroom',
+            required: true,
+        }
     ],
 }
 
