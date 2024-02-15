@@ -136,6 +136,7 @@ module.exports = class User {
 
     async createUser({username, email, password, isAdmin=false, school="school"}){
         try {
+            console.log(this.validators)
             let user;
             if (isAdmin == false && school=="school") {
                 return {
