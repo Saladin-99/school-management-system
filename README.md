@@ -2,7 +2,7 @@
 This code is cloned and edited from:[qantra-io/axion (github.com)](https://github.com/qantra-io/axion/)
 This was done according to this hiring challenge:
 https://www.linkedin.com/posts/bahi-hussein_github-qantra-ioaxion-activity-7162392778562301952-Dqmr?utm_source=share&utm_medium=member_desktop
-
+**Note:** Entry point is app.js
 
 ## Api documentation
 
