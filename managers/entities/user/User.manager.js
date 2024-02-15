@@ -136,6 +136,7 @@ module.exports = class User {
 
     async createUser({username, email, password, isAdmin=false, school="school"}){
         try {
+            console.log("user: " + username + email)
             console.log(this.validators)
             let user;
             if (isAdmin == false && school=="school") {
@@ -151,6 +152,7 @@ module.exports = class User {
                 let affiliatedSchool=school
                 user = {username, email, password, isAdmin, affiliatedSchool}
             }else {
+                console.log("in user")
                 user = {username, email, password, isAdmin};
             }
             // Data validation
